@@ -1,5 +1,7 @@
 Warning: The docker files are mostly generated using GPT 5.6 Luna. ** Use at your own risk **
 
+Fedora hasn't published Rocm 7.2, the containers are used as a workaround since Ubuntu is supported as a install target. 
+
 I've tested the setup on Fedora 44 + Framework desktop host, specifically on :
 - llama-cpp's rocm binary ( the path parameters in the Makefile needs to be adjusted to wherever you download your llama-cpp rocm binaries and your models )
 - comfy-ui running some models.
