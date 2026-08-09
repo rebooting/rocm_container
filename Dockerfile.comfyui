@@ -1,0 +1,63 @@
+# ComfyUI with ROCm/PyTorch GPU support.
+# The host must provide the AMDGPU kernel driver and the container GPU devices.
+ARG BASE_IMAGE=rocm-ubuntu:7.2
+FROM ${BASE_IMAGE}
+
+ARG COMFYUI_REPO=https://github.com/Comfy-Org/ComfyUI.git
+ARG COMFYUI_REF=master
+ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/rocm7.2
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PATH=/opt/venv/bin:/opt/rocm/bin:/opt/rocm/llvm/bin:${PATH} \
+    LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    DO_NOT_TRACK=1
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        ffmpeg \
+        git \
+        libgl1 \
+        libglib2.0-0 \
+        python3-dev \
+        python3-pip \
+        python3-venv \
+    && python3 -m venv /opt/venv \
+    && python -m pip install --no-cache-dir --upgrade pip \
+    && git clone --depth 1 --branch "${COMFYUI_REF}" "${COMFYUI_REPO}" /opt/ComfyUI \
+    && python -m pip install --no-cache-dir \
+        torch \
+        torchvision \
+        torchaudio \
+        --index-url "${PYTORCH_INDEX_URL}" \
+    && grep --invert-match --extended-regexp '^(torch|torchvision|torchaudio)([<=>].*)?$' \
+        /opt/ComfyUI/requirements.txt \
+        > /tmp/comfyui-requirements.txt \
+    && python -m pip install --no-cache-dir --requirement /tmp/comfyui-requirements.txt \
+    && rm --force /tmp/comfyui-requirements.txt \
+    && apt-get remove --yes git \
+    && apt-get autoremove --yes \
+    && apt-get clean \
+    && rm --recursive --force /var/lib/apt/lists/*
+
+RUN mkdir --parents /workspace/ComfyUI \
+    && chown --recursive "${APP_UID}:${APP_GID}" /workspace/ComfyUI
+
+COPY comfyui-entrypoint.sh /usr/local/bin/comfyui-entrypoint
+RUN chmod 0755 /usr/local/bin/comfyui-entrypoint
+
+WORKDIR /workspace/ComfyUI
+
+ENV HOME=/workspace/ComfyUI/user
+
+USER ${APP_UID}:${APP_GID}
+
+EXPOSE 8188
+
+ENTRYPOINT ["/usr/local/bin/comfyui-entrypoint"]
+
+CMD ["python", "main.py", "--listen", "0.0.0.0", "--port", "8188"]
